@@ -270,7 +270,7 @@ def kopjo_faqen():
     manifest = {
         "name": "PostimDSH", "short_name": "PostimDSH", "description": "Detyrat e shtëpisë – Viti i parë",
         "lang": "sq", "start_url": "./", "display": "standalone",
-        "background_color": "#f7f3ea", "theme_color": "#fffdf7", "icons": ikonat,
+        "background_color": "#f2f4f8", "theme_color": "#16305c", "icons": ikonat,
     }
     with open(os.path.join(DALJA, "manifest.webmanifest"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False)
@@ -341,8 +341,15 @@ def main():
     perdorur = set()
 
     renditja = {n.lower(): i for i, n in enumerate(RENDITJA)}
+    os.makedirs(DETYRA, exist_ok=True)
     emrat = [d for d in os.listdir(DETYRA)
              if os.path.isdir(os.path.join(DETYRA, d)) and not d.startswith((".", "_"))]
+    if not emrat:
+        # Ngarkimi nga shfletuesi nuk merr dosje bosh: nisim me lëndët bazë.
+        # Menaxho i krijon ato në GitHub gjatë konfigurimit të parë.
+        emrat = list(RENDITJA)
+        for emri in emrat:
+            os.makedirs(os.path.join(DETYRA, emri), exist_ok=True)
     emrat.sort(key=lambda d: (renditja.get(nfc(d).strip().lower(), len(RENDITJA)), natyral(d)))
 
     lendet = []
