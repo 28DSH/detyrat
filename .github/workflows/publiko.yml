@@ -1,0 +1,48 @@
+name: Publiko faqen
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publiko:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install "pillow>=11.3" pillow-heif
+
+      # Fotot e përpunuara më parë ruhen, që të mos bëhen nga e para çdo herë.
+      - uses: actions/cache@v4
+        with:
+          path: _site/f
+          key: fotot-${{ github.run_id }}
+          restore-keys: fotot-
+
+      - run: python nderto.py
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4
