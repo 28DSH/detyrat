@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="sq">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Menaxho – PostimDSH</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#16305c" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f2248" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="logo.svg">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,600;0,700;1,600&display=swap" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="stil.css">
+</head>
+<body class="faqe-menaxho">
+<header class="krye" id="krye">
+  <div class="krye-brenda">
+    <a href="./" class="marka" aria-label="Kthehu te PostimDSH">
+      <img class="logo" src="logo.svg" width="44" height="44" alt="Logo e shkollës">
+      <span class="marka-tekst">
+        <span class="marka-emri">Postim<b>DSH<svg class="vize" viewBox="0 0 60 8" preserveAspectRatio="none" aria-hidden="true"><path d="M2 5.5C14 2.5 30 2 58 4.2"/></svg></b></span>
+        <span class="marka-nen">Menaxho · vetëm për ty</span>
+      </span>
+    </a>
+  </div>
+</header>
+
+<main id="m"><div class="ngarkim"><span></span><span></span><span></span></div></main>
+
+<nav class="skedat" id="skedat" hidden><div class="skedat-brenda" id="skedat-brenda">
+  <button type="button" data-skeda="posto">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4Z"/><circle cx="12" cy="13" r="3.5"/></svg>
+    <span>Posto</span>
+  </button>
+  <button type="button" data-skeda="arkiva">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/></svg>
+    <span>Arkiva</span>
+  </button>
+  <button type="button" data-skeda="lendet">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>
+    <span>Lëndët</span>
+  </button>
+  <button type="button" data-skeda="orari">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>
+    <span>Orari</span>
+  </button>
+  <button type="button" data-skeda="cilesimet">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>
+    <span>Cilësimet</span>
+  </button>
+</div></nav>
+
+<div id="njoftim" class="njoftim" role="status" aria-live="polite"></div>
+
+<script src="baza.js" defer></script>
+<script src="menaxho.js" defer></script>
+</body>
+</html>

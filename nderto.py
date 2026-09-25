@@ -197,6 +197,7 @@ def ndertoj_postim(id_, data, deri, pershkrim, skedaret, perdorur):
         f = perpuno(shtegu, perdorur)
         if f:
             f["g"] = grupi
+            f["o"] = nfc(os.path.relpath(shtegu, RRENJA).replace(os.sep, "/"))  # për Arkivën te Menaxho
             fotot.append(f)
             shtuar = max(shtuar, kur_u_shtua(shtegu))
     if not fotot:
