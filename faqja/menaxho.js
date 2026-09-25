@@ -20,6 +20,7 @@
 
   let LENDET = [];   // [{emri, dosja, postime: [{dosja, foto, te}], te}]
   let ORARI = [];    // [{dita, lendet: [emri]}]
+  let ORARI_ORIGJINAL = null; // orari siç është në GitHub, për të dalluar ndryshimet e paruajtura
   let skeda = 'posto';
   let duke_punuar = false;
   let forma = formaEre();
@@ -48,10 +49,11 @@
 
   function emriPostimit(dosja) {
     if (!dosja) return 'Foto pa dosje';
-    const mm = dosja.match(/^(\d{4})-(\d{1,2})-(\d{1,2})\s*(.*)$/);
-    if (!mm) return dosja;
-    const d = new Date(+mm[1], mm[2] - 1, +mm[3]);
-    return `${DITET[d.getDay()]}, ${d.getDate()} ${MUAJT[d.getMonth()]}` + (mm[4] ? ' · ' + mm[4] : '');
+    const { data, deri, pershkrim } = lexoEmrin(dosja);
+    if (!data) return dosja;
+    const dm = iso => { const d = dite(iso); return `${d.getDate()} ${MUAJT[d.getMonth()]}`; };
+    const koha = deri ? `${dm(data)} – ${dm(deri)}` : `${DITET[dite(data).getDay()]}, ${dm(data)}`;
+    return koha + (pershkrim ? ' · ' + pershkrim : '');
   }
 
   let njoftimKoha = 0;
@@ -157,6 +159,7 @@
     LENDET = ndertoLendet(pema);
     const o = pema.find(e => e.path === 'orari.txt');
     ORARI = lexoOrarin(o ? dekodo((await gh(`/git/blobs/${o.sha}`)).content) : '');
+    ORARI_ORIGJINAL = JSON.stringify(ORARI);
   }
 
   /* ---------- Enkriptimi i çelësit ---------- */
@@ -202,10 +205,40 @@
     try { sessionStorage.removeItem('pdsh-token'); localStorage.removeItem('pdsh-token'); } catch (e) { /* s'ka gjë */ }
   }
 
+  // Lëndët bazë, që krijohen kur repoja s'ka ende asnjë dosje lënde.
+  const LENDET_BAZE = ['Gjuhë shqipe', 'Letërsi', 'Anglisht', 'Gjermanisht', 'Matematikë', 'Fizikë',
+    'Kimi', 'Biologji', 'Histori', 'Gjeografi', 'Qytetari'];
+
   async function ruajHyrjen(perdoruesi, fjalekalimi) {
     const e = await enkripto(cfg.token, perdoruesi, fjalekalimi);
-    await bejCommit('Ndrysho hyrjen e Menaxho', [{ path: 'faqja/hyrja.json', content: JSON.stringify(e, null, 1) + '\n' }]);
+    const ndryshimet = [{ path: 'faqja/hyrja.json', content: JSON.stringify(e, null, 1) + '\n' }];
+    // Ngarkimi nga shfletuesi në GitHub nuk merr dosje bosh, prandaj i krijojmë këtu.
+    if (!LENDET.length) LENDET_BAZE.forEach(l => ndryshimet.push({ path: `detyra/${l}/.gitkeep`, content: '' }));
+    await bejCommit('Ndrysho hyrjen e Menaxho', ndryshimet);
     HYRJA = e;
+    if (!LENDET.length) await ngarkoTeDhenat();
+  }
+
+  // Si EMRI_DOSJES te nderto.py: "2026-09-22 Përshkrim", "22.09.2026", "15.09.2026 - 19.09.2026 Java e kaluar".
+  const DATA_RE = '(\\d{4})[-.](\\d{1,2})[-.](\\d{1,2})|(\\d{1,2})[-.](\\d{1,2})[-.](\\d{4})';
+  const EMRI_DOSJES = new RegExp(`^\\s*(?:${DATA_RE})(?:\\s*(?:deri më|deri|–|-|_)\\s*(?:${DATA_RE}))?\\s*[-–_:,.]?\\s*(.*)$`, 'i');
+
+  function dataNga(g) {
+    const [y, mu, d] = g[0] ? [g[0], g[1], g[2]] : g[5] ? [g[5], g[4], g[3]] : [];
+    if (!y) return null;
+    const dt = new Date(+y, mu - 1, +d);
+    if (dt.getMonth() !== mu - 1 || dt.getDate() !== +d) return null; // p.sh. 31.02
+    return `${y}-${String(mu).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+
+  function lexoEmrin(dosja) {
+    const mm = dosja.normalize('NFC').match(EMRI_DOSJES);
+    const data = mm && dataNga(mm.slice(1, 7));
+    if (!data) return { data: null, deri: null, pershkrim: dosja.normalize('NFC').trim() };
+    let deri = dataNga(mm.slice(7, 13));
+    let fillimi = data;
+    if (deri && deri < fillimi) [fillimi, deri] = [deri, fillimi];
+    return { data: fillimi, deri: deri && deri !== fillimi ? deri : null, pershkrim: (mm[13] || '').trim() };
   }
 
   function ndertoLendet(pema) {
@@ -225,16 +258,19 @@
       const eshteFoto = FOTO.test(pj[pj.length - 1]);
       if (pj.length === 2 && !eshteFoto) return; // .gitkeep i lëndës
       const dosja = pj.length === 2 ? '' : pj[1];
-      if (!l.postime.has(dosja)) l.postime.set(dosja, { dosja, foto: 0, te: [] });
+      if (!l.postime.has(dosja)) l.postime.set(dosja, Object.assign({ dosja, foto: 0, te: [], skedaret: [] }, lexoEmrin(dosja)));
       const p = l.postime.get(dosja);
       p.te.push(e.path);
+      p.skedaret.push({ path: e.path, sha: e.sha, foto: eshteFoto });
       if (eshteFoto) p.foto++;
     });
     const renditja = id => { const i = RENDITJA.indexOf(id); return i < 0 ? 99 : i; };
     return [...lendet.values()]
       .map(l => Object.assign(l, {
         id: slug(l.emri),
-        postime: [...l.postime.values()].sort((a, b) => b.dosja.localeCompare(a.dosja, undefined, { numeric: true })),
+        // Më e reja e para; "Foto pa dosje" dhe dosjet pa datë në fund.
+        postime: [...l.postime.values()].sort((a, b) =>
+          (b.data || '').localeCompare(a.data || '') || b.dosja.localeCompare(a.dosja, undefined, { numeric: true })),
       }))
       .sort((a, b) => renditja(a.id) - renditja(b.id) || a.emri.localeCompare(b.emri));
   }
@@ -388,10 +424,21 @@
 
   /* ---------- Paneli ---------- */
 
-  const SKEDAT = ['posto', 'postimet', 'orari', 'cilesimet'];
+  const SKEDAT = ['posto', 'arkiva', 'lendet', 'orari', 'cilesimet'];
 
-  function nisPanelin() {
+  async function nisPanelin() {
     skedat.hidden = false;
+    // Ngarkimi nga shfletuesi në GitHub nuk merr dosje bosh; nëse s'ka asnjë lëndë, krijojmë lëndët bazë.
+    if (!LENDET.length) {
+      m.innerHTML = NGARKIM;
+      try {
+        await bejCommit('Krijo lëndët bazë', LENDET_BAZE.map(l => ({ path: `detyra/${l}/.gitkeep`, content: '' })));
+        await ngarkoTeDhenat();
+        njofto('U krijuan lëndët bazë.');
+      } catch (e) {
+        njofto(mesazhiGabimit(e));
+      }
+    }
     hapSkeden(skeda);
   }
 
@@ -399,7 +446,7 @@
     skeda = s;
     skedat.querySelectorAll('button').forEach(b => b.classList.toggle('aktiv', b.dataset.skeda === s));
     document.getElementById('skedat-brenda').style.setProperty('--i', SKEDAT.indexOf(s));
-    ({ posto: faqjaPostos, postimet: faqjaPostimeve, orari: faqjaOrarit, cilesimet: faqjaCilesimeve })[s]();
+    ({ posto: faqjaPostos, arkiva: hapArkiven, lendet: faqjaLendeve, orari: faqjaOrarit, cilesimet: faqjaCilesimeve })[s]();
     if (LEVIZJE) {
       m.classList.remove('hyr');
       void m.offsetWidth; // rinis animacionin e hyrjes
@@ -410,7 +457,12 @@
 
   skedat.addEventListener('click', e => {
     const b = e.target.closest('button');
-    if (b && !duke_punuar && b.dataset.skeda !== skeda) hapSkeden(b.dataset.skeda);
+    if (!b || duke_punuar || b.dataset.skeda === skeda) return;
+    if (skeda === 'orari' && ORARI_ORIGJINAL && JSON.stringify(ORARI) !== ORARI_ORIGJINAL) {
+      if (!confirm('Ke ndryshime në orar që s\'janë ruajtur. T\'i heq?')) return;
+      ORARI = JSON.parse(ORARI_ORIGJINAL);
+    }
+    hapSkeden(b.dataset.skeda);
   });
 
   /* ---------- Posto ---------- */
@@ -440,7 +492,11 @@
   }
 
   function faqjaPostos() {
-    const lenda = LENDET.find(l => l.dosja === forma.lenda);
+    let lenda = LENDET.find(l => l.dosja === forma.lenda);
+    // Lënda (ose postimi) mund të jetë fshirë ndërkohë: nisim nga e para, por i mbajmë fotot e zgjedhura.
+    if (forma.lenda && !lenda) forma = Object.assign(formaEre(), { fotot: forma.fotot });
+    if (lenda && forma.dosja && !lenda.postime.some(p => p.dosja === forma.dosja)) forma.dosja = null;
+    lenda = LENDET.find(l => l.dosja === forma.lenda);
     const shton = forma.dosja !== null;
     let h = '<section class="m-karte m-posto">';
 
@@ -449,9 +505,16 @@
         <button type="button" id="p-anulo" class="m-lidhje">Anulo</button></div>`;
     }
 
-    h += '<div class="m-posto-majtas">' + hapi('lenda', 1, 'Lënda') + '<div class="m-lendet">';
+    h += '<div class="m-posto-majtas">' +
+      hapi('lenda', 1, lenda ? `Lënda: <span class="m-zgjedhja-emri">${esc(lenda.emri)}</span>` : 'Zgjidh lëndën');
+    if (!LENDET.length) {
+      h += `<div class="m-bosh-lende"><p>Nuk u gjet asnjë lëndë.</p>
+        <button type="button" id="p-krijo-lendet" class="m-buton">Krijo lëndët bazë</button></div>`;
+    }
+    h += '<div class="m-lendet">';
     LENDET.forEach((l, i) => {
-      h += `<button type="button" class="m-lende${l.dosja === forma.lenda ? ' zgjedhur' : ''}" data-lenda="${esc(l.dosja)}"${shton ? ' disabled' : ''}>` +
+      const zgj = l.dosja === forma.lenda;
+      h += `<button type="button" class="m-lende${zgj ? ' zgjedhur' : ''}" data-lenda="${esc(l.dosja)}" aria-pressed="${zgj}"${shton ? ' disabled' : ''}>` +
         `${ikona(l, i, 'e-vogel')}<span>${esc(l.emri)}</span></button>`;
     });
     h += '</div>';
@@ -503,6 +566,11 @@
     if (pershkrim) pershkrim.oninput = shenoHapat;
     const anulo = document.getElementById('p-anulo');
     if (anulo) anulo.onclick = () => { forma = formaEre(); faqjaPostos(); };
+    const krijo = document.getElementById('p-krijo-lendet');
+    if (krijo) {
+      krijo.onclick = () => ruajNdryshimin('Krijo lëndët bazë',
+        LENDET_BAZE.map(l => ({ path: `detyra/${l}/.gitkeep`, content: '' })), 'U krijuan lëndët.');
+    }
     ['p-galeria', 'p-kamera'].forEach(id => {
       document.getElementById(id).onchange = e => {
         shtoFotot(e.target.files);
@@ -725,46 +793,269 @@
     }
   }
 
-  /* ---------- Postimet ---------- */
+  /* ---------- Arkiva (menaxhimi i postimeve) ---------- */
 
-  function faqjaPostimeve() {
-    let h = '';
-    LENDET.forEach((l, i) => {
-      const nr = l.postime.reduce((s, p) => s + p.foto, 0);
-      h += `<details class="m-karte m-lista"><summary>${ikona(l, i, 'e-vogel')}<span class="l-tekst"><span class="l-emri">${esc(l.emri)}</span>` +
-        `<span class="l-meta">${l.postime.length} postime · ${nr} foto</span></span></summary><div class="m-postimet">`;
-      if (!l.postime.length) h += '<p class="m-shenim">Ende pa postime.</p>';
-      l.postime.forEach((p, pi) => {
-        h += `<div class="m-postim"><div class="l-tekst"><b>${esc(emriPostimit(p.dosja))}</b><small>${p.foto} foto</small></div>` +
-          (p.dosja ? `<button type="button" class="m-cip" data-shto="${i}:${pi}">+ Foto</button>` : '') +
-          `<button type="button" class="m-cip rrezik" data-fshi="${i}:${pi}">Fshi</button></div>`;
-      });
-      h += `<button type="button" class="m-lidhje rrezik m-fshi-lende" data-fshi-lende="${i}">Fshi lëndën ${esc(l.emri)}</button></div></details>`;
+  const arkiva = { filtri: 'te-gjitha', lenda: '', zgjedhur: new Set(), hapur: null, ndrysho: null };
+  let MINIATURAT = new Map(); // shtegu i fotos në GitHub -> { t, m } nga faqja e ndërtuar
+
+  // Fotot e vogla i marrim nga faqja e publikuar; fotot e reja i kanë pas 1–2 minutash.
+  async function ngarkoMiniaturat() {
+    try {
+      const d = await (await fetch('te-dhenat.json', { cache: 'no-cache' })).json();
+      const map = new Map();
+      d.lendet.forEach(l => l.postime.forEach(p => p.foto.forEach(f => { if (f.o) map.set(f.o.normalize('NFC'), f); })));
+      MINIATURAT = map;
+    } catch (e) { /* pa miniatura: shfaqen katrorë bosh */ }
+  }
+
+  // Si te faqja: vetëm postimi më i ri i lëndës është aktual, dhe vetëm deri në orën e mësimit.
+  function gjendjaPostimit(l, pi) {
+    const p = l.postime[pi];
+    const iRi = l.postime.findIndex(q => q.foto > 0);
+    const a = p.data ? afati(l, p.deri || p.data) : null;
+    const sot = new Date(); sot.setHours(0, 0, 0, 0);
+    return { a, kaluar: pi !== iRi || !p.data || (a !== null && a < sot) };
+  }
+
+  function teGjithaPostimet() {
+    const lista = [];
+    LENDET.forEach((l, li) => l.postime.forEach((p, pi) => {
+      if (!p.foto) return;
+      lista.push({ celesi: `${li}:${pi}`, l, li, p, pi, g: gjendjaPostimit(l, pi) });
+    }));
+    return lista.sort((a, b) => (b.p.data || '').localeCompare(a.p.data || '') || a.li - b.li);
+  }
+
+  function miniature(s, klasa) {
+    const f = MINIATURAT.get(s.path.normalize('NFC'));
+    return f
+      ? `<a class="${klasa}" href="${esc(f.m)}" target="_blank" rel="noopener"><img src="${esc(f.t)}" alt="" loading="lazy" decoding="async"></a>`
+      : `<span class="${klasa} m-pa-mini" title="Fotoja shfaqet pasi të përditësohet faqja">…</span>`;
+  }
+
+  function hapArkiven() {
+    faqjaArkives();
+    ngarkoMiniaturat().then(() => { if (skeda === 'arkiva' && !duke_punuar) faqjaArkives(); });
+  }
+
+  function faqjaArkives() {
+    const te = teGjithaPostimet();
+    const nr = { 'te-gjitha': te.length, aktuale: te.filter(x => !x.g.kaluar).length, kaluara: te.filter(x => x.g.kaluar).length };
+    const dukshme = te.filter(x =>
+      (arkiva.filtri === 'te-gjitha' || (arkiva.filtri === 'kaluara') === x.g.kaluar) &&
+      (!arkiva.lenda || x.l.dosja === arkiva.lenda));
+    // Hiq nga zgjedhja postimet që s'ekzistojnë më.
+    arkiva.zgjedhur.forEach(k => { if (!te.some(x => x.celesi === k)) arkiva.zgjedhur.delete(k); });
+
+    let h = `<section class="m-karte m-arkiva-koka">
+      <h2 class="m-hapi">Arkiva e postimeve</h2>
+      <div class="m-rresht">` +
+      [['te-gjitha', 'Të gjitha'], ['aktuale', 'Aktuale'], ['kaluara', 'Të kaluara']].map(([v, t]) =>
+        `<button type="button" class="m-cip${arkiva.filtri === v ? ' zgjedhur' : ''}" data-filtri="${v}">${t} <small>${nr[v]}</small></button>`).join('') +
+      `</div>
+      <div class="m-rresht m-arkiva-rresht2">
+        <select id="a-lenda" class="m-fushe m-zgjidh-lenden">
+          <option value="">Të gjitha lëndët</option>` +
+      LENDET.map(l => `<option value="${esc(l.dosja)}"${arkiva.lenda === l.dosja ? ' selected' : ''}>${esc(l.emri)}</option>`).join('') +
+      `</select>
+        <button type="button" class="m-cip" id="a-zgjidh-dukshmet">Zgjidh të gjitha këto</button>
+      </div>
+    </section>`;
+
+    if (!dukshme.length) {
+      h += '<p class="bosh-msg">S\'ka postime këtu.</p>';
+    }
+    dukshme.forEach(x => {
+      const { l, li, p, celesi } = x;
+      const fotot = p.skedaret.filter(s => s.foto);
+      const hapur = arkiva.hapur === celesi, ndrysho = arkiva.ndrysho === celesi;
+      h += `<article class="m-karte m-arkiv${arkiva.zgjedhur.has(celesi) ? ' zgjedhur' : ''}${x.g.kaluar ? ' kaluar' : ''}" style="--c:${ngjyraLendes(l, li)}">
+        <div class="m-arkiv-krye">
+          <label class="m-zgjedh" aria-label="Zgjidh"><input type="checkbox" data-zgjedh="${celesi}"${arkiva.zgjedhur.has(celesi) ? ' checked' : ''}><span></span></label>
+          ${ikona(l, li, 'e-vogel')}
+          <div class="l-tekst">
+            <span class="rej-lenda">${esc(l.emri)}</span>
+            <b>${esc(emriPostimit(p.dosja))}</b>
+            <small>${fotot.length} foto${x.g.kaluar ? ' · <span class="etikete kaluar">E kaluar</span>'
+              : x.g.a ? ` · <span class="etikete afat">${esc(kapitalizo(tekstAfati(x.g.a)))}</span>` : ''}</small>
+          </div>
+        </div>`;
+
+      if (!hapur) {
+        h += '<div class="m-miniaturat">' + fotot.slice(0, 4).map(s => miniature(s, 'm-mini')).join('') +
+          (fotot.length > 4 ? `<span class="m-mini m-me-shume">+${fotot.length - 4}</span>` : '') + '</div>';
+      } else {
+        h += '<div class="m-te-gjitha">' + fotot.map(s =>
+          `<div class="m-foto">${miniature(s, 'm-foto-img')}<button type="button" data-fshi-foto="${celesi}|${esc(s.path)}" aria-label="Fshi këtë foto">&times;</button></div>`).join('') +
+          '</div>';
+      }
+
+      if (ndrysho) {
+        h += `<div class="m-ndrysho">
+          <label class="m-etiketa">Data kur u dha<input type="date" class="m-fushe" id="n-data" value="${p.data || dataISO(0)}"></label>
+          <label class="m-etiketa">Përshkrimi<input class="m-fushe" id="n-pershkrim" maxlength="60" value="${esc(p.data ? p.pershkrim : (p.dosja ? p.pershkrim : ''))}" placeholder="p.sh. Ushtrime faqe 34"></label>
+          <div class="m-rresht"><button type="button" class="m-buton" data-ruaj-ndryshimin="${celesi}">Ruaj</button>
+          <button type="button" class="m-lidhje" data-anulo-ndryshimin>Anulo</button></div>
+        </div>`;
+      }
+
+      h += `<div class="m-rresht m-veprimet">
+          <button type="button" class="m-cip" data-hap="${celesi}">${hapur ? 'Mbyll fotot' : 'Fotot'}</button>
+          ${p.dosja ? `<button type="button" class="m-cip" data-shto-foto="${celesi}">+ Foto</button>` : ''}
+          <button type="button" class="m-cip" data-ndrysho="${celesi}">Ndrysho</button>
+          <button type="button" class="m-cip rrezik" data-fshi-postim="${celesi}">Fshi</button>
+        </div>
+      </article>`;
     });
-    h += `<section class="m-karte"><h2 class="m-hapi">Shto lëndë të re</h2>
-      <div class="m-rresht"><input id="l-emri" class="m-fushe" placeholder="p.sh. Italisht" maxlength="40">
-      <button type="button" id="l-shto" class="m-buton">Shto</button></div></section>`;
-    m.innerHTML = h;
-    zbulo(m, '.m-lista');
 
-    m.querySelectorAll('[data-shto]').forEach(b => b.onclick = () => {
-      const [i, pi] = b.dataset.shto.split(':').map(Number);
-      forma = formaEre(LENDET[i].dosja);
-      forma.dosja = LENDET[i].postime[pi].dosja;
+    h += `<div class="m-zgjedhja" id="a-bari"${arkiva.zgjedhur.size ? '' : ' hidden'}>
+      <span id="a-numri"></span>
+      <button type="button" class="m-lidhje" id="a-hiq">Hiq zgjedhjen</button>
+      <button type="button" class="m-buton rrezik-plot" id="a-fshi">Fshi</button>
+    </div>`;
+
+    const y = window.scrollY;
+    m.innerHTML = h;
+    window.scrollTo(0, y);
+    perditesoBarin();
+
+    const gjej = k => { const [li, pi] = k.split(':').map(Number); return { l: LENDET[li], p: LENDET[li].postime[pi] }; };
+
+    m.querySelectorAll('[data-filtri]').forEach(b => b.onclick = () => { arkiva.filtri = b.dataset.filtri; faqjaArkives(); });
+    document.getElementById('a-lenda').onchange = e => { arkiva.lenda = e.target.value; faqjaArkives(); };
+    document.getElementById('a-zgjidh-dukshmet').onclick = () => {
+      dukshme.forEach(x => arkiva.zgjedhur.add(x.celesi));
+      faqjaArkives();
+    };
+    m.querySelectorAll('[data-zgjedh]').forEach(c => c.onchange = () => {
+      if (c.checked) arkiva.zgjedhur.add(c.dataset.zgjedh); else arkiva.zgjedhur.delete(c.dataset.zgjedh);
+      c.closest('.m-arkiv').classList.toggle('zgjedhur', c.checked);
+      perditesoBarin();
+    });
+    m.querySelectorAll('[data-hap]').forEach(b => b.onclick = () => {
+      arkiva.hapur = arkiva.hapur === b.dataset.hap ? null : b.dataset.hap;
+      faqjaArkives();
+    });
+    m.querySelectorAll('[data-ndrysho]').forEach(b => b.onclick = () => {
+      arkiva.ndrysho = arkiva.ndrysho === b.dataset.ndrysho ? null : b.dataset.ndrysho;
+      faqjaArkives();
+    });
+    const anulo = m.querySelector('[data-anulo-ndryshimin]');
+    if (anulo) anulo.onclick = () => { arkiva.ndrysho = null; faqjaArkives(); };
+    m.querySelectorAll('[data-shto-foto]').forEach(b => b.onclick = () => {
+      const { l, p } = gjej(b.dataset.shtoFoto);
+      forma = formaEre(l.dosja);
+      forma.dosja = p.dosja;
       hapSkeden('posto');
     });
-    m.querySelectorAll('[data-fshi]').forEach(b => b.onclick = () => {
-      const [i, pi] = b.dataset.fshi.split(':').map(Number);
-      const l = LENDET[i], p = l.postime[pi];
-      if (!confirm(`Ta fshij „${emriPostimit(p.dosja)}“ te ${l.emri} (${p.foto} foto)?`)) return;
-      const ndryshimet = p.te.map(path => ({ path, fshi: true }));
-      // Mos e humb dosjen e lëndës kur fshihet postimi i fundit.
-      if (l.te.length === p.te.length) ndryshimet.push({ path: `detyra/${l.dosja}/.gitkeep`, content: '' });
-      ruajNdryshimin(`Fshi: ${l.emri} ${p.dosja}`, ndryshimet, 'Postimi u fshi.');
+    m.querySelectorAll('[data-fshi-postim]').forEach(b => b.onclick = () => {
+      const { l, p } = gjej(b.dataset.fshiPostim);
+      if (!confirm(`Ta fshij „${emriPostimit(p.dosja)}“ te ${l.emri} (${p.foto} foto)? Kjo s'kthehet mbrapsht.`)) return;
+      fshiPostimet([b.dataset.fshiPostim], 'Postimi u fshi.');
+    });
+    m.querySelectorAll('[data-fshi-foto]').forEach(b => b.onclick = () => {
+      const [k, path] = b.dataset.fshiFoto.split('|');
+      const { l, p } = gjej(k);
+      if (!confirm(p.foto === 1 ? 'Kjo është fotoja e fundit, prandaj fshihet i gjithë postimi. Vazhdo?' : 'Ta fshij këtë foto?')) return;
+      const fshi = p.foto === 1 ? p.te : [path];
+      ruajNdryshimin(`Fshi foto: ${l.emri} ${p.dosja}`, ndryshimetEFshirjes(l, fshi), 'Fotoja u fshi.');
+    });
+    const ruajB = m.querySelector('[data-ruaj-ndryshimin]');
+    if (ruajB) ruajB.onclick = () => ndryshoPostimin(ruajB.dataset.ruajNdryshimin);
+    document.getElementById('a-hiq').onclick = () => { arkiva.zgjedhur.clear(); faqjaArkives(); };
+    document.getElementById('a-fshi').onclick = () => {
+      const n = arkiva.zgjedhur.size;
+      if (!n || !confirm(`T'i fshij ${n} postimet e zgjedhura me të gjitha fotot? Kjo s'kthehet mbrapsht.`)) return;
+      fshiPostimet([...arkiva.zgjedhur], `U fshinë ${n} postime.`);
+    };
+  }
+
+  function perditesoBarin() {
+    const bari = document.getElementById('a-bari');
+    if (!bari) return;
+    const n = arkiva.zgjedhur.size;
+    bari.hidden = !n;
+    document.getElementById('a-numri').textContent = `${n} ${n === 1 ? 'e zgjedhur' : 'të zgjedhura'}`;
+  }
+
+  const ngjyraLendes = (l, i) => window.PDSH.ngjyra(l, i);
+
+  // Fshirja; nëse lënda mbetet bosh, i lë një .gitkeep që të mos zhduket nga faqja.
+  function ndryshimetEFshirjes(l, shtigjet) {
+    const fshi = new Set(shtigjet);
+    const ndryshimet = [...fshi].map(path => ({ path, fshi: true }));
+    if (l.te.every(p => fshi.has(p))) {
+      const keep = `detyra/${l.dosja}/.gitkeep`;
+      return ndryshimet.filter(n => n.path !== keep).concat({ path: keep, content: '' });
+    }
+    return ndryshimet;
+  }
+
+  function fshiPostimet(celesat, sukses) {
+    const sipasLendes = new Map();
+    celesat.forEach(k => {
+      const [li, pi] = k.split(':').map(Number);
+      const l = LENDET[li], p = l && l.postime[pi];
+      if (!p) return;
+      if (!sipasLendes.has(l)) sipasLendes.set(l, []);
+      sipasLendes.get(l).push(...p.te);
+    });
+    const ndryshimet = [];
+    sipasLendes.forEach((shtigjet, l) => ndryshimet.push(...ndryshimetEFshirjes(l, shtigjet)));
+    if (!ndryshimet.length) return;
+    arkiva.zgjedhur.clear();
+    arkiva.hapur = arkiva.ndrysho = null;
+    ruajNdryshimin(`Fshi ${celesat.length} postime`, ndryshimet, sukses);
+  }
+
+  // Ndryshimi i datës/përshkrimit = zhvendosja e fotove në dosjen me emrin e ri (pa i ngarkuar sërish).
+  function ndryshoPostimin(k) {
+    const [li, pi] = k.split(':').map(Number);
+    const l = LENDET[li], p = l.postime[pi];
+    const data = document.getElementById('n-data').value;
+    const pershkrim = pastro(document.getElementById('n-pershkrim').value);
+    if (!data) return njofto('Zgjidh datën.');
+    const pjesaEDates = data === p.data && p.deri ? `${p.data} - ${p.deri}` : data;
+    const dosjaRe = pjesaEDates + (pershkrim ? ' ' + pershkrim : '');
+    if (dosjaRe === p.dosja) { arkiva.ndrysho = null; return faqjaArkives(); }
+    if (l.postime.some(q => q !== p && q.dosja === dosjaRe) &&
+      !confirm('Ka tashmë një postim me këtë datë dhe përshkrim. Fotot do të bashkohen në të. Vazhdo?')) return;
+
+    const prefiksi = `detyra/${l.dosja}/${p.dosja ? p.dosja + '/' : ''}`;
+    const ndryshimet = [];
+    p.skedaret.forEach(s => {
+      const pjesa = s.path.slice(prefiksi.length);
+      ndryshimet.push({ path: `detyra/${l.dosja}/${dosjaRe}/${pjesa}`, sha: s.sha }, { path: s.path, fshi: true });
+    });
+    arkiva.ndrysho = null;
+    ruajNdryshimin(`Ndrysho: ${l.emri} ${p.dosja} → ${dosjaRe}`, ndryshimet, 'Postimi u ndryshua.');
+  }
+
+  /* ---------- Lëndët ---------- */
+
+  function faqjaLendeve() {
+    let h = '<section class="m-karte"><h2 class="m-hapi">Lëndët</h2>';
+    LENDET.forEach((l, i) => {
+      const nrFoto = l.postime.reduce((s, p) => s + p.foto, 0);
+      h += `<div class="m-postim">${ikona(l, i, 'e-vogel')}<div class="l-tekst"><b>${esc(l.emri)}</b>` +
+        `<small>${l.postime.length} postime · ${nrFoto} foto</small></div>` +
+        `<button type="button" class="m-cip" data-shiko-lenden="${esc(l.dosja)}">Postimet</button>` +
+        `<button type="button" class="m-cip rrezik" data-fshi-lende="${i}">Fshi</button></div>`;
+    });
+    h += `</section><section class="m-karte"><h2 class="m-hapi">Shto lëndë të re</h2>
+      <div class="m-rresht"><input id="l-emri" class="m-fushe m-flex" placeholder="p.sh. Italisht" maxlength="40">
+      <button type="button" id="l-shto" class="m-buton">Shto</button></div></section>`;
+    m.innerHTML = h;
+
+    m.querySelectorAll('[data-shiko-lenden]').forEach(b => b.onclick = () => {
+      Object.assign(arkiva, { lenda: b.dataset.shikoLenden, filtri: 'te-gjitha', hapur: null, ndrysho: null });
+      hapSkeden('arkiva');
     });
     m.querySelectorAll('[data-fshi-lende]').forEach(b => b.onclick = () => {
       const l = LENDET[+b.dataset.fshiLende];
-      if (!confirm(`Ta fshij krejt lëndën „${l.emri}“ me të gjitha fotot? Kjo s'kthehet mbrapsht.`)) return;
+      const nrFoto = l.postime.reduce((s, p) => s + p.foto, 0);
+      if (!confirm(`Ta fshij krejt lëndën „${l.emri}“ me ${nrFoto} foto? Kjo s'kthehet mbrapsht.`)) return;
+      if (nrFoto && !confirm(`Je i sigurt? Do të fshihen ${nrFoto} foto të ${l.emri}.`)) return;
       ruajNdryshimin(`Fshi lëndën ${l.emri}`, l.te.map(path => ({ path, fshi: true })), 'Lënda u fshi.');
     });
     document.getElementById('l-shto').onclick = () => {
@@ -792,16 +1083,39 @@
 
   /* ---------- Orari ---------- */
 
+  // Të gjitha lëndët që mund të vendosen në orar: lëndët bazë, ato me dosje, ato që janë tashmë në orar,
+  // dhe orët pa detyra. Pa dublikata (edhe kur shkruhen pak ndryshe, p.sh. "Fizik" dhe "Fizikë").
+  function opsionetEOrarit() {
+    const lista = [];
+    const shto = emri => {
+      const s = slug(emri);
+      if (emri && !lista.some(x => slug(x) === s)) lista.push(emri);
+    };
+    LENDET.forEach(l => shto(l.emri));
+    LENDET_BAZE.forEach(shto);
+    ORARI.forEach(o => o.lendet.forEach(shto));
+    PA_DETYRA.forEach(shto);
+    const vendi = e => { const i = RENDITJA.indexOf(slug(e)); return i < 0 ? 50 + (PA_DETYRA.includes(e) ? 1 : 0) : i; };
+    return lista.sort((a, b) => vendi(a) - vendi(b) || a.localeCompare(b));
+  }
+
   function faqjaOrarit() {
-    const opsionet = [...new Set(LENDET.map(l => l.emri).concat(PA_DETYRA))];
-    let h = '<section class="m-karte"><p class="m-shenim">Rendit lëndët siç i ke gjatë ditës. Nga orari faqja llogarit vetë afatet e detyrave.</p>';
+    if (!ORARI_ORIGJINAL) ORARI_ORIGJINAL = JSON.stringify(ORARI);
+    const ndryshuar = JSON.stringify(ORARI) !== ORARI_ORIGJINAL;
+    const opsionet = opsionetEOrarit();
+    let h = '<section class="m-karte"><h2 class="m-hapi">Orari i javës</h2>' +
+      '<p class="m-shenim">Shto lëndët me radhë, siç i ke gjatë ditës. Nga orari faqja llogarit vetë afatet e detyrave.</p>';
     ORARI.forEach((o, oi) => {
-      h += `<div class="m-dita"><h3>${kapitalizo(DITET[o.dita])}</h3><div class="m-rresht">` +
-        o.lendet.map((x, xi) => `<span class="m-cip zgjedhur">${esc(x)}<button type="button" data-hiq-or="${oi}:${xi}" aria-label="Hiqe">&times;</button></span>`).join('') +
-        `<select class="m-shto-or" data-shto-or="${oi}"><option value="">+ Shto</option>` +
-        opsionet.map(x => `<option>${esc(x)}</option>`).join('') + '</select></div></div>';
+      h += `<div class="m-dita"><h3>${kapitalizo(DITET[o.dita])} <small>${o.lendet.length} orë</small></h3><div class="m-rresht">` +
+        o.lendet.map((x, xi) => `<span class="m-cip zgjedhur">${esc(x)}<button type="button" data-hiq-or="${oi}:${xi}" aria-label="Hiqe ${esc(x)}">&times;</button></span>`).join('') +
+        `<select class="m-shto-or" data-shto-or="${oi}" aria-label="Shto lëndë të ${esc(DITET[o.dita])}"><option value="">+ Shto</option>` +
+        opsionet.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('') +
+        '<option value="__tjeter">Tjetër…</option></select></div></div>';
     });
-    h += '<button type="button" id="o-ruaj" class="m-buton kryesor">Ruaj orarin</button></section>';
+    h += (ndryshuar ? '<p class="m-paruajtur">Ke ndryshime të paruajtura.</p>' : '') +
+      `<button type="button" id="o-ruaj" class="m-buton kryesor"${ndryshuar ? '' : ' disabled'}>${ndryshuar ? 'Ruaj orarin' : 'Orari është i ruajtur'}</button>` +
+      (ndryshuar ? '<p class="m-poshte"><button type="button" id="o-anulo" class="m-lidhje">Anulo ndryshimet</button></p>' : '') +
+      '</section>';
     m.innerHTML = h;
 
     m.querySelectorAll('[data-hiq-or]').forEach(b => b.onclick = () => {
@@ -810,11 +1124,17 @@
       faqjaOrarit();
     });
     m.querySelectorAll('[data-shto-or]').forEach(s => s.onchange = () => {
-      if (s.value) ORARI[+s.dataset.shtoOr].lendet.push(s.value);
+      let emri = s.value;
+      if (emri === '__tjeter') emri = pastro(prompt('Emri i lëndës:') || '');
+      if (emri) ORARI[+s.dataset.shtoOr].lendet.push(emri);
       faqjaOrarit();
     });
-    document.getElementById('o-ruaj').onclick = () =>
+    const anulo = document.getElementById('o-anulo');
+    if (anulo) anulo.onclick = () => { ORARI = JSON.parse(ORARI_ORIGJINAL); faqjaOrarit(); };
+    document.getElementById('o-ruaj').onclick = () => {
+      // Pas ruajtjes orari lexohet sërish nga GitHub (te ngarkoTeDhenat).
       ruajNdryshimin('Ndrysho orarin', [{ path: 'orari.txt', content: shkruajOrarin() }], 'Orari u ruajt.');
+    };
   }
 
   /* ---------- Cilësimet ---------- */
