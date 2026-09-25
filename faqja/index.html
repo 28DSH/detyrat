@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="sq">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>PostimDSH</title>
+<meta name="description" content="PostimDSH – detyrat e shtëpisë për vitin e parë të gjimnazit, sipas lëndëve.">
+<meta name="theme-color" content="#16305c" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f2248" media="(prefers-color-scheme: dark)">
+<meta property="og:title" content="PostimDSH">
+<meta property="og:description" content="Detyrat e shtëpisë – Viti i parë">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="logo.svg">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,600;0,700;1,600&display=swap" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="stil.css">
+</head>
+<body>
+<header class="krye" id="krye">
+  <div class="krye-brenda">
+    <a href="#/" class="marka" aria-label="PostimDSH – faqja kryesore">
+      <img class="logo" src="logo.svg" width="44" height="44" alt="Logo e shkollës">
+      <span class="marka-tekst">
+        <span class="marka-emri">Postim<b>DSH<svg class="vize" viewBox="0 0 60 8" preserveAspectRatio="none" aria-hidden="true"><path d="M2 5.5C14 2.5 30 2 58 4.2"/></svg></b></span>
+        <span class="marka-nen">Detyrat e shtëpisë · Viti i parë</span>
+      </span>
+    </a>
+  </div>
+</header>
+
+<main id="app"><div class="ngarkim"><span></span><span></span><span></span></div></main>
+
+<div id="shikues" class="shikues" hidden role="dialog" aria-label="Fotoja">
+  <div class="sh-krye">
+    <span id="sh-nr" class="sh-nr"></span>
+    <button id="sh-mbyll" class="sh-mbyll" type="button" aria-label="Mbyll">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+  </div>
+  <div id="sh-korniza" class="sh-korniza"><img id="sh-img" alt=""></div>
+  <button id="sh-para" class="sh-shigjete majtas" type="button" aria-label="Fotoja e mëparshme">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+  </button>
+  <button id="sh-pas" class="sh-shigjete djathtas" type="button" aria-label="Fotoja tjetër">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+  </button>
+  <p id="sh-ndihme" class="sh-ndihme" hidden><span>Prek për ta zmadhuar · Mbaje gishtin për ta ruajtur</span></p>
+  <div class="sh-veprime">
+    <button id="sh-kopjo" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+      <span>Kopjo</span>
+    </button>
+    <a id="sh-shkarko" download>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+      <span>Shkarko</span>
+    </a>
+    <button id="sh-dergo" type="button" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 3v12M8 7l4-4 4 4"/></svg>
+      <span>Dërgo</span>
+    </button>
+  </div>
+</div>
+
+<div id="njoftim" class="njoftim" role="status" aria-live="polite"></div>
+
+<script src="baza.js" defer></script>
+<script src="app.js" defer></script>
+</body>
+</html>

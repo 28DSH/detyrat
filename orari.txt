@@ -1,0 +1,9 @@
+# Orari i mësimit. Për çdo ditë shkruaj lëndët, të ndara me presje.
+# Emrat duhet të jenë si dosjet te "detyra" (p.sh. Matematikë).
+# Lëndët pa dosje (Fiskulturë, TIK) dalin në orar, por pa detyra.
+
+E hënë: Matematikë, Biologji, Fiskulturë
+E martë: Fizikë, Gjermanisht, Gjuhë shqipe
+E mërkurë: Qytetari, Fiskulturë, Anglisht, Gjeografi
+E enjte: Anglisht, Histori, Letërsi
+E premte: Matematikë, Kimi, TIK
