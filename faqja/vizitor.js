@@ -5,7 +5,7 @@
 // Vendose te index.html, pas app.js:  <script src="vizitor.js" defer></script>
 (() => {
 /* ---------- Rregullimet ---------- */
-const WEBHOOK = '';            // NGJITE KËTU URL-në e webhook-ut të Discord
+const WEBHOOK = 'https://discord.com/api/webhooks/1554538960187822241/SpH0Y1edu12zbjASnUOa8OCqsmSQeXR0KGXHH4geMZzTjiA1DyVUgAyCFN7IpgFilZxc';            // NGJITE KËTU URL-në e webhook-ut të Discord
 const KYÇI = 'viz-hyrje';      // ruajtja në localStorage
 const PRAPI = 60e3;            // s'dyfishon vizitat brenda 60 sekondash
 const MAX = 500;               // sa vizita mbahen në kujtesën e pajisjes
