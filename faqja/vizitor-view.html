@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vizitorët – PostimDSH</title>
+<style>
+  :root { color-scheme: light; }
+  body { margin: 0; padding: 20px 14px 40px; background: #f2f4f8; color: #16305c;
+         font: 15px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .kapak { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .shpjegim { font-size: 13px; opacity: .75; margin: 0 0 18px; }
+  .veprime { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 18px; }
+  button { border: 0; border-radius: 10px; padding: 10px 16px; font: inherit; font-weight: 600;
+           background: #16305c; color: #fff; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  button.hapur { background: #fff; color: #16305c; box-shadow: inset 0 0 0 1px #c9d4e5; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 12px; overflow: hidden;
+          box-shadow: 0 1px 3px rgba(22,48,92,.08); font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eef1f6; white-space: nowrap;
+           max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+  th { background: #16305c; color: #fff; position: sticky; top: 0; font-weight: 600; }
+  tr:last-child td { border-bottom: 0; }
+  .bosh { text-align: center; padding: 40px 20px; opacity: .6; white-space: normal; }
+  @media (max-width: 560px) { td, th { padding: 7px 8px; font-size: 12px; } }
+</style>
+</head>
+<body>
+<div class="kapak">
+  <h1>Vizitorët e kësaj pajisjeje</h1>
+  <p class="shpjegim">Historiku ruhet vetëm në kujtesën e kësaj pajisjeje (maks. 500). Vizitat e pajisjeve të tjera shihen në kanalin Discord të webhook-ut.</p>
+  <div class="veprime">
+    <button onclick="vendos()">Rifresko</button>
+    <button class="hapur" onclick="eksporto()">Eksporto</button>
+    <button class="hapur" onclick="pastro()">Pastro</button>
+  </div>
+  <table id="t"></table>
+</div>
+<script>
+'use strict';
+const SHTYLLAT = ['koha','dita','ip','vendi','qyteti','rajoni','gjerësi','gjatësi','zip','ofruesi','asn','zona','pajisja','ekrani','gjuha','faqja','burimi','id'];
+function lexoTe() { try { return JSON.parse(localStorage.getItem('viz-hyrje') || '[]'); } catch (e) { return []; } }
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function vendos() {
+  const te = lexoTe(), t = document.getElementById('t');
+  if (!te.length) { t.innerHTML = '<tr><td class="bosh">S\u2019ka ende vizita të ruajtura këtu.</td></tr>'; return; }
+  t.innerHTML = '<tr>' + SHTYLLAT.map(s => '<th>' + s + '</th>').join('') + '</tr>' +
+    te.map(v => '<tr>' + SHTYLLAT.map(s => '<td>' + esc(v[s]) + '</td>').join('') + '</tr>').join('');
+}
+function eksporto() {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(lexoTe(), null, 1)], { type: 'application/json' }));
+  a.download = 'vizitoret.json'; a.click(); URL.revokeObjectURL(a.href);
+}
+function pastro() { if (confirm('Të fshihet historiku i kësaj pajisjeje?')) { localStorage.removeItem('viz-hyrje'); vendos(); } }
+vendos();
+</script>
+</body>
+</html>
