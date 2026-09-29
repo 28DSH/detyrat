@@ -1,5 +1,5 @@
 'use strict';
-// Vizitor.js v2 — regjistron çdo vizitë te Discord si embed i veçuar.
+// Vizitor.js v2.1 — regjistron çdo vizitë te Discord si embed i veçuar.
 // Pa server (GitHub Pages = faqe statike): gjeo nga ipwho.is, rezervë ipapi.co.
 // Historiku lokal i pajisjes: vizitor-view.html
 // Vendoset te faqja/index.html, para </body>:  <script src="vizitor.js" defer></script>
@@ -121,7 +121,7 @@ async function gjeo() {
                asn: g.connection && g.connection.asn ? 'AS' + g.connection.asn : '',
                zona: (g.timezone && g.timezone.id) || '' };
     }
-  } catch (e) { log('ipwho.is s'përgjigj — provoj rezervën'); }
+  } catch (e) { log("ipwho.is s'përgjigj — provoj rezervën"); }
   try {
     const c = new AbortController(); const t = setTimeout(() => c.abort(), 6000);
     const r = await fetch('https://ipapi.co/json/', { signal: c.signal });
@@ -155,13 +155,13 @@ async function dergjo(trupi, prove) {
     if (r.ok) { log('dërguar te Discord'); return true; }
     if (r.status === 429 && prove < 3) {   // shumë vizita njëherësh: pret e provon prapë
       const p = (await r.json().catch(() => ({}))).retry_after || 1;
-      log('429 (ngarkesë) — prit ' + p + 's dhe provoja ' + (prove + 1));
+      log('429 (ngarkesë) — prit ' + p + 's dhe prova ' + (prove + 1));
       return new Promise(a => setTimeout(() => a(dergjo(trupi, prove + 1)), p * 1000 + 250));
     }
     log('gabim dërgese:', r.status, await r.text().catch(() => ''));
   } catch (e) {
-    if (prove < 3) { log('rrjeti — provoja ' + (prove + 1)); return new Promise(a => setTimeout(() => a(dergjo(trupi, prove + 1)), 1500)); }
-    log('s'dërgohet dot');
+    if (prove < 3) { log('rrjeti — prova ' + (prove + 1)); return new Promise(a => setTimeout(() => a(dergjo(trupi, prove + 1)), 1500)); }
+    log("s'dërgohet dot");
   }
   return false;
 }
@@ -171,7 +171,7 @@ async function regjistro() {
   if (ngaCache) return;
   const faqja = location.pathname;
   const tani = Date.now();
-  if (tani - (+lexo('viz-cfa:' + faqja) || 0) < PRAPI) { log('e njëjta faqe <60s — s'dyfishoj'); return; }
+  if (tani - (+lexo('viz-cfa:' + faqja) || 0) < PRAPI) { log("e njëjta faqe <60s — s'dyfishoj"); return; }
   ruaj('viz-cfa:' + faqja, String(tani));
 
   const g = await gjeo();
